@@ -16,19 +16,19 @@ public extension Array where Element: SectionType {
 	- Returns: A string like "<sectionCount: 4 itemCounts: [0: 16], [1: 25], [2: 17], [3: 4]>"
 	*/
 	public var nestedDescription: String {
-		let countsStr = enumerate().map { "[\($0): \($1.items.count)]" }.joinWithSeparator(", ")
+		let countsStr = enumerated().map { "[\($0): \($1.items.count)]" }.joined(separator: ", ")
 		return "<sectionCount: \(count) itemCounts: \(countsStr)>"
 	}
 	
 	/**
 	Attempt to retrieve the item at the given index path. Returns nil if the index is out of bounds.
 	*/
-	public subscript (indexPath: NSIndexPath) -> Element.Item? {
-		let sectionIndex = indexPath.indexAtPosition(0)
+	public subscript (indexPath: IndexPath) -> Element.Item? {
+		let sectionIndex = indexPath.startIndex
 		guard indices.contains(sectionIndex) else { return nil }
 		
 		let section = self[sectionIndex]
-		let itemIndex = indexPath.indexAtPosition(1)
+		let itemIndex = indexPath.index(indexPath.startIndex, offsetBy: 1)
 		guard section.items.indices.contains(itemIndex) else { return nil }
 		
 		return section.items[itemIndex]
@@ -60,11 +60,12 @@ public struct NestedDiff {
 	Determine the new index path, if any, for the given old index path.
 	- Returns: The index path after the update, or nil if the item was removed
 	*/
-	public func newIndexPathForOldIndexPath(indexPath: NSIndexPath) -> NSIndexPath? {
-		let oldSection = indexPath.indexAtPosition(0)
+	public func newIndexPathForOldIndexPath(_ indexPath: IndexPath) -> IndexPath? {
+		let oldSection = indexPath.startIndex
+		let somePosition = indexPath.index(indexPath.startIndex, offsetBy: 1)
 		if let newSection = sectionsDiff.newIndexForOldIndex(oldSection),
-		newItem = itemDiffs[oldSection]?.newIndexForOldIndex(indexPath.indexAtPosition(1)) {
-			return NSIndexPath(indexes: [newSection, newItem], length: 2)
+		let newItem = itemDiffs[oldSection]?.newIndexForOldIndex(somePosition) {
+			return (NSIndexPath(indexes: [newSection, newItem], length: 2) as IndexPath)
 		} else {
 			return nil
 		}
@@ -74,10 +75,11 @@ public struct NestedDiff {
 	Determine the new index path, if any, for the given old index path.
 	- Returns: The index path before the update, or nil if the item was inserted
 	*/
-	public func oldIndexPathForNewIndexPath(newIndexPath: NSIndexPath) -> NSIndexPath? {
-		if let oldSection = sectionsDiff.oldIndexForNewIndex(newIndexPath.indexAtPosition(0)),
-		oldItem = itemDiffs[oldSection]?.oldIndexForNewIndex(newIndexPath.indexAtPosition(1)) {
-			return NSIndexPath(indexes: [oldSection, oldItem], length: 2)
+	public func oldIndexPathForNewIndexPath(_ newIndexPath: IndexPath) -> IndexPath? {
+		let somePosition = newIndexPath.index(newIndexPath.startIndex, offsetBy: 1)
+		if let oldSection = sectionsDiff.oldIndexForNewIndex(newIndexPath.startIndex),
+		let oldItem = itemDiffs[oldSection]?.oldIndexForNewIndex(somePosition) {
+			return (NSIndexPath(indexes: [oldSection, oldItem], length: 2) as IndexPath)
 		} else {
 			return nil
 		}
@@ -109,11 +111,11 @@ public extension Array where Element: SectionType {
 	itemDiffs is indexed based on the _old_ section indexes.
 	
 	*/
-	public func diffNested(newData: Array<Element>) -> NestedDiff {
+	public func diffNested(_ newData: Array<Element>) -> NestedDiff {
 		let sectionDiff = diff(newData)
 		
 		// diffs will exist for all sections that weren't deleted or inserted
-		let itemDiffs: [ArrayDiff?] = self.enumerate().map { oldSectionIndex, oldSectionInfo in
+		let itemDiffs: [ArrayDiff?] = self.enumerated().map { oldSectionIndex, oldSectionInfo in
 			if let newSection = sectionDiff.newIndexForOldIndex(oldSectionIndex) {
 				assert(newData[newSection] == oldSectionInfo, "Diffing for the wrong section!")
 				return oldSectionInfo.items.diff(newData[newSection].items)
